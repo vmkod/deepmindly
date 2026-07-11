@@ -1,0 +1,1 @@
+from .storage import save_window_title
