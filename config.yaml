@@ -1,0 +1,7 @@
+database:
+  # Путь указывается относительно расположения этого config.yaml
+  path: "data/deepmindly.db"
+
+watcher:
+  # Частота проверки активного окна, в секундах
+  interval_seconds: 2
