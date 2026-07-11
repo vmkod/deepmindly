@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from core.os import start_watching
 
 
