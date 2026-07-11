@@ -1,4 +1,4 @@
-from core import start_watching
+from core.os import start_watching
 
 
 def main():

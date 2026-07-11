@@ -1,19 +1,24 @@
+from __future__ import annotations
+
 import time
 import win32gui
-from core import settings
+
+from core.config import settings
+from core.db import save_window_title
 from .cleaner import clean_title
-from core import save_window_title
 
 
 def start_watching():
-    print(f"[*] Запуск трекера. Интервал: {settings.watch_interval} сек. (Ctrl+C для остановки)")
+    print(
+        f"[*] Запуск трекера. Интервал: {settings.watch_interval} сек. (Ctrl+C для остановки)"
+    )
 
-    last_title = ""
+    last_title: str = ""
 
     try:
         while True:
             hwnd = win32gui.GetForegroundWindow()
-            raw_title = win32gui.GetWindowText(hwnd)
+            raw_title: str = win32gui.GetWindowText(hwnd)
 
             cleaned_title = clean_title(raw_title)
 
