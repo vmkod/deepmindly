@@ -10,6 +10,7 @@ import yaml
 class Settings:
     watch_interval: int
     db_path: Path
+    ai_model_name: str
 
 
 def _find_config_path(filename: str = "config.yaml"):
@@ -19,7 +20,7 @@ def _find_config_path(filename: str = "config.yaml"):
         if candidate.exists():
             return candidate
     raise FileNotFoundError(
-        f"Не удалось найти {filename}. Убедитесь, что файл существует в корне проекта."
+        f"Не удалось найти {filename}."
     )
 
 
@@ -31,6 +32,7 @@ def load_settings():
 
     watcher_cfg: dict = raw.get("watcher", {})
     db_cfg: dict = raw.get("database", {})
+    ai_cfg: dict = raw.get("ai", {})
 
     db_path = Path(db_cfg.get("path", "data/deepmindly.db"))
     if not db_path.is_absolute():
@@ -38,7 +40,8 @@ def load_settings():
 
     return Settings(
         watch_interval=int(watcher_cfg.get("interval_seconds", 5)),
-        db_path=db_path
+        db_path=db_path,
+        ai_model_name=str(ai_cfg.get("model_name", "all-MiniLM-L6-v2"))
     )
 
 

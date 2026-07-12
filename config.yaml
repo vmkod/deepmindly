@@ -5,3 +5,7 @@ database:
 watcher:
   # Частота проверки активного окна, в секундах
   interval_seconds: 2
+
+ai:
+  # Модель для построения эмбеддингов заголовков
+  model_name: "all-MiniLM-L6-v2"
