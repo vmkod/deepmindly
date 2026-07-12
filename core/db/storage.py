@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Dict, Optional
 
 from .connect import db_cursor, init_db
 
@@ -31,3 +31,13 @@ def fetch_all_titles():
         )
         rows = cur.fetchall()
     return [WindowRecord(*row) for row in rows]
+
+
+def update_cluster_assignments(assignments: Dict[int, int]):
+    if not assignments:
+        return
+    with db_cursor() as cur:
+        cur.executemany(
+            "UPDATE window_titles SET cluster_id = ? WHERE id = ?",
+            [(cluster_id, record_id) for record_id, cluster_id in assignments.items()],
+        )
