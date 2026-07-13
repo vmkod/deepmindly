@@ -1,11 +1,14 @@
 [project]
 name = "deepmindly"
 version = "0.1.0"
-description = "Add your description here"
+description = "DeepMindly — локальный AI-трекер продуктивности"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "numpy>=2.5.1",
     "pywin32>=312",
     "pyyaml>=6.0.3",
+    "rich>=15.0.0",
+    "scikit-learn>=1.9.0",
     "sentence-transformers>=5.6.0",
 ]

@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 import argparse
+from typing import List
+
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
 
 from core.ai.brain import ClusterBrain
 from core.ai.vectors import encode_titles
+from core.config import settings
 from core.db import fetch_all_titles, update_cluster_assignments
 from core.os import start_watching
+
+console = Console()
 
 
 def run_watch():
@@ -13,20 +21,25 @@ def run_watch():
 
 
 def run_analyze():
+    print("Загрузка истории заголовков из базы данных...")
     records = fetch_all_titles()
 
     if len(records) < 3:
-        print(
-            "Недостаточно данных. Сначала запустите --watch"
+        console.print(
+            Panel(
+                f"Недостаточно данных для анализа (найдено записей: {len(records)}).\n"
+                "Сначала запустите [bold]python main.py --watch[/bold], чтобы накопить историю.",
+                title="⚠ DeepMindly",
+                style="yellow",
+            )
         )
         return
 
     titles = [record.title for record in records]
-
-    print(f"Загружено {len(titles)} заголовков. Строим эмбеддинги...")
+    print(f"Загружено {len(titles)} заголовков. Строим эмбеддинги ({settings.ai_model_name})...")
     embeddings = encode_titles(titles)
 
-    print("Кластеризуем активность...")
+    print(f"Кластеризация методом K-Means (n_clusters={settings.ai_n_clusters})...")
     brain = ClusterBrain()
     labels = brain.fit(embeddings)
 
@@ -34,48 +47,36 @@ def run_analyze():
     update_cluster_assignments(assignments)
 
     summaries = brain.summarize(titles, embeddings)
+    print(f"Готово: выделено {len(summaries)} кластеров.")
 
-    print("\n===== Результаты кластеризации =====")
-    for summary in summaries:
-        print(f"\nКластер #{summary.cluster_id} — {summary.size} записей")
-        for i, title in enumerate(summary.top_titles, start=1):
-            print(f"   {i}. {title}")
+    _render_clusters_table(summaries)
 
 
-def show_all_titles():
-    titles = fetch_all_titles()
+def _render_clusters_table(summaries: List):
+    table = Table(
+        title="DeepMindly — Текущий анализ активности",
+        show_lines=True,
+        title_style="bold magenta",
+    )
+    table.add_column("#", justify="right", style="dim")
+    table.add_column("Кластер ID", style="bold")
+    table.add_column("Записей", justify="right")
+    table.add_column("Типичные заголовки")
 
-    for record in titles:
-        print(f"- {record}")
+    ordered = sorted(summaries, key=lambda s: s.size, reverse=True)
 
+    for position, summary in enumerate(ordered, start=1):
+        top_titles_block = "\n".join(f"• {t}" for t in summary.top_titles)
+        table.add_row(
+            str(position),
+            f"Кластер #{summary.cluster_id}",
+            str(summary.size),
+            top_titles_block
+        )
 
-def vectorization():
-    titles = fetch_all_titles()
-
-    if not titles:
-        print("Недостаточно данных. Сначала запустите --watch")
-        return
-
-    raw_titles = [record.title for record in titles]
-    test_titles = list(set(raw_titles))[:3]
-
-    print(f"\nБерем для теста {len(test_titles)} уникальных заголовка(ов):")
-    for idx, t in enumerate(test_titles, 1):
-        print(f"  {idx}. {t}")
-
-    print("\nЗапуск модели и кодирование...")
-
-    embeddings = encode_titles(test_titles)
-
-    print("\n===== Результаты векторизации =====")
-    print(f"Форма матрицы: {embeddings.shape}")
-
-    for i, title in enumerate(test_titles):
-        vector = embeddings[i]
-        vector_preview = vector[:5]
-
-        print(f"\nЗаголовок: '{title}'")
-        print(f"  Первые 5 чисел (скалярные веса): {vector_preview}")
+    console.print(table)
+    total_records = sum(s.size for s in ordered)
+    console.print(f"[dim]Всего записей: {total_records} | Кластеров: {len(ordered)}[/dim]")
 
 
 def build_parser():
@@ -84,35 +85,17 @@ def build_parser():
         description="DeepMindly — локальный AI-трекер продуктивности",
     )
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument(
-        "--watch", action="store_true", help="Запустить фоновый сбор данных"
-    )
-    group.add_argument(
-        "--titles", action="store_true", help="Показать все записи"
-    )
-    group.add_argument(
-        "--vectorization", action="store_true", help="Проверить работу векторизации"
-    )
-    group.add_argument(
-        "--analyze", action="store_true", help="Запустить кластеризацию"
-    )
+    group.add_argument("--watch", action="store_true", help="Запустить фоновый сбор данных")
+    group.add_argument("--analyze", action="store_true", help="Запустить кластеризацию и вывести результаты")
     return parser
 
 
 def main():
-    print("=============")
-    print("🧠 DEEPMINDLY")
-    print("=============")
-
     parser = build_parser()
     args = parser.parse_args()
 
     if args.watch:
         run_watch()
-    elif args.titles:
-        show_all_titles()
-    elif args.vectorization:
-        vectorization()
     elif args.analyze:
         run_analyze()
 
