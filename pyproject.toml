@@ -1,7 +1,7 @@
 [project]
 name = "deepmindly"
 version = "0.1.0"
-description = "DeepMindly — локальный AI-трекер продуктивности"
+description = "DeepMindly — локальный AI-трекер активности"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -11,4 +11,5 @@ dependencies = [
     "rich>=15.0.0",
     "scikit-learn>=1.9.0",
     "sentence-transformers>=5.6.0",
+    "sentencepiece>=0.2.2",
 ]

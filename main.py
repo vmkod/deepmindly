@@ -9,10 +9,11 @@ from rich.panel import Panel
 from rich.table import Table
 
 from core.ai.brain import ClusterBrain
+from core.ai.namer import name_cluster
 from core.ai.vectors import encode_titles
 from core.config import settings
 from core.db import fetch_all_titles, update_cluster_assignments
-from core.db.history import ClusterSnapshot, get_run, list_runs, save_run
+from core.db.history import ClusterSnapshot, get_run, list_runs, rename_cluster, save_run
 from core.os import start_watching
 
 console = Console()
@@ -54,9 +55,9 @@ def run_analyze():
     snapshots = [
         ClusterSnapshot(
             cluster_index=summary.cluster_id,
-            name=f"Кластер #{summary.cluster_id}",
+            name=name_cluster(summary.top_titles),
             size=summary.size,
-            top_titles=summary.top_titles,
+            top_titles=summary.top_titles
         )
         for summary in summaries
     ]
@@ -66,7 +67,7 @@ def run_analyze():
 
     _render_clusters_table(snapshots, today)
     console.print(
-        "\n[dim]Подсказка: [bold]main.py --history[/bold] — посмотреть прошлые дни.[/dim]"
+        "\n[dim]Подсказка: [bold]main.py --history[/bold] — посмотреть прошлые дни и переименовать активности.[/dim]"
     )
 
 
@@ -85,7 +86,7 @@ def run_history():
     index = len(dates) - 1
     console.print(
         "[dim]Команды: [bold]n[/bold] — следующий день · [bold]p[/bold] — предыдущий день · "
-        "[bold]q[/bold] — выход[/dim]\n"
+        "[bold]r[/bold] — переименовать активность · [bold]q[/bold] — выход[/dim]\n"
     )
 
     while True:
@@ -95,7 +96,7 @@ def run_history():
             console.print(f"[red]Не удалось загрузить данные за {run_date}.[/red]")
             break
 
-        _render_clusters_table(run.clusters, run.run_date)
+        order = _render_clusters_table(run.clusters, run.run_date)
         console.print(f"[dim]День {index + 1} из {len(dates)}[/dim]")
 
         command = console.input("\n[bold]> [/bold]").strip().lower()
@@ -111,10 +112,36 @@ def run_history():
                 index -= 1
             else:
                 console.print("[yellow]Это первый день в истории.[/yellow]\n")
+        elif command == "r":
+            _rename_cluster_interactive(run.run_date, order)
         elif command == "q":
             break
         else:
-            console.print("[red]Неизвестная команда. Используйте n / p / q.[/red]\n")
+            console.print("[red]Неизвестная команда. Используйте n / p / r / q.[/red]\n")
+
+
+def _rename_cluster_interactive(run_date: str, order: List[int]):
+    raw_number = console.input(f"Номер строки для переименования (1-{len(order)}): ").strip()
+    try:
+        position = int(raw_number)
+    except ValueError:
+        console.print("[red]Введите число.[/red]\n")
+        return
+
+    if not (1 <= position <= len(order)):
+        console.print("[red]Нет строки с таким номером.[/red]\n")
+        return
+
+    cluster_index = order[position - 1]
+    new_name = console.input("Новое название для этой активности: ").strip()
+    if not new_name:
+        console.print("[red]Название не может быть пустым.[/red]\n")
+        return
+
+    if rename_cluster(run_date, cluster_index, new_name):
+        console.print(f"[green]Готово! Название успешно сохранено.[/green]\n")
+    else:
+        console.print("[red]Не удалось обновить имя в базе.[/red]\n")
 
 
 def _render_clusters_table(clusters: List[ClusterSnapshot], run_date: str):
@@ -123,9 +150,9 @@ def _render_clusters_table(clusters: List[ClusterSnapshot], run_date: str):
         show_lines=True,
         title_style="bold magenta",
     )
-    table.add_column("#", justify="right", style="dim")
-    table.add_column("Кластер", style="bold")
-    table.add_column("Записей", justify="right")
+    table.add_column("Номер строки", justify="center", style="bold yellow")
+    table.add_column("Активность", style="bold green")
+    table.add_column("Записей", justify="center")
     table.add_column("Типичные заголовки")
 
     ordered = sorted(clusters, key=lambda c: c.size, reverse=True)
@@ -135,26 +162,20 @@ def _render_clusters_table(clusters: List[ClusterSnapshot], run_date: str):
 
     console.print(table)
     total_records = sum(c.size for c in ordered)
-    console.print(f"[dim]Всего записей: {total_records} | Кластеров: {len(ordered)}[/dim]")
+    console.print(f"[dim]Всего записей: {total_records} | Активностей: {len(ordered)}[/dim]")
+
+    return [c.cluster_index for c in ordered]
 
 
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="deepmindly",
-        description="DeepMindly — локальный AI-трекер продуктивности",
+        description="DeepMindly — локальный AI-трекер активности",
     )
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--watch", action="store_true", help="Запустить фоновый сбор данных")
-    group.add_argument(
-        "--analyze",
-        action="store_true",
-        help="Запустить кластеризацию и сохранить снимок за сегодня",
-    )
-    group.add_argument(
-        "--history",
-        action="store_true",
-        help="Просмотреть снимки анализа по дням",
-    )
+    group.add_argument("--analyze", action="store_true", help="Запустить кластеризацию и сохранить снимок за сегодня")
+    group.add_argument("--history", action="store_true", help="Просмотреть снимки анализа по дням")
     return parser
 
 

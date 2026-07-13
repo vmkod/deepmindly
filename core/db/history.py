@@ -111,3 +111,19 @@ def list_runs(limit: int = 365):
             (limit,),
         )
         return [row[0] for row in cur.fetchall()]
+
+
+def rename_cluster(run_date: str, cluster_index: int, new_name: str):
+    init_history_tables()
+    with db_cursor() as cur:
+        cur.execute("SELECT id FROM analysis_runs WHERE run_date = ?", (run_date,))
+        row = cur.fetchone()
+        if row is None:
+            return False
+        run_id = row[0]
+
+        cur.execute(
+            "UPDATE analysis_clusters SET name = ? WHERE run_id = ? AND cluster_index = ?",
+            (new_name, run_id, cluster_index),
+        )
+        return cur.rowcount > 0
