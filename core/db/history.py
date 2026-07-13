@@ -13,6 +13,7 @@ class ClusterSnapshot:
     name: str
     size: int
     top_titles: List[str]
+    duration_seconds: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -42,7 +43,8 @@ def init_history_tables():
                 cluster_index INTEGER NOT NULL,
                 name TEXT NOT NULL,
                 size INTEGER NOT NULL,
-                top_titles TEXT NOT NULL
+                top_titles TEXT NOT NULL,
+                duration_seconds REAL NOT NULL DEFAULT 0
             )
             """
         )
@@ -66,11 +68,11 @@ def save_run(run_date: str, clusters: List[ClusterSnapshot]):
 
         cur.executemany(
             """
-            INSERT INTO analysis_clusters (run_id, cluster_index, name, size, top_titles)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO analysis_clusters (run_id, cluster_index, name, size, top_titles, duration_seconds)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
             [
-                (run_id, c.cluster_index, c.name, c.size, json.dumps(c.top_titles, ensure_ascii=False))
+                (run_id, c.cluster_index, c.name, c.size, json.dumps(c.top_titles, ensure_ascii=False), c.duration_seconds)
                 for c in clusters
             ],
         )
@@ -86,7 +88,7 @@ def get_run(run_date: str):
         run_id = row[0]
 
         cur.execute(
-            "SELECT cluster_index, name, size, top_titles FROM analysis_clusters WHERE run_id = ?",
+            "SELECT cluster_index, name, size, top_titles, duration_seconds FROM analysis_clusters WHERE run_id = ?",
             (run_id,),
         )
         cluster_rows = cur.fetchall()
@@ -97,8 +99,9 @@ def get_run(run_date: str):
             name=name,
             size=size,
             top_titles=json.loads(top_titles_json),
+            duration_seconds=duration_seconds
         )
-        for cluster_index, name, size, top_titles_json in cluster_rows
+        for cluster_index, name, size, top_titles_json, duration_seconds in cluster_rows
     ]
     return AnalysisRun(run_id=run_id, run_date=run_date, clusters=clusters)
 

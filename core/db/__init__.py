@@ -1,6 +1,6 @@
 from .connect import get_connection, init_db
 from .history import AnalysisRun, ClusterSnapshot, get_run, list_runs, rename_cluster, save_run
-from .storage import WindowRecord, fetch_all_titles, save_window_title, update_cluster_assignments
+from .storage import WindowRecord, compute_durations, fetch_all_titles, save_window_title, update_cluster_assignments
 
 __all__ = [
     "get_connection",
@@ -9,6 +9,7 @@ __all__ = [
     "save_window_title",
     "fetch_all_titles",
     "update_cluster_assignments",
+    "compute_durations",
     "AnalysisRun",
     "ClusterSnapshot",
     "save_run",

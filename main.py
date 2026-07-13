@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import argparse
+from collections import defaultdict
 from datetime import date
-from typing import List
+from typing import Dict, List
 
 from loguru import logger
 from rich.console import Console
@@ -13,8 +14,9 @@ from core.ai.brain import ClusterBrain
 from core.ai.namer import name_cluster
 from core.ai.vectors import encode_titles
 from core.config import settings
-from core.db import fetch_all_titles, update_cluster_assignments
+from core.db import compute_durations, fetch_all_titles, update_cluster_assignments
 from core.db.history import ClusterSnapshot, get_run, list_runs, rename_cluster, save_run
+from core.formatting import format_duration, render_time_bar
 from core.logging_setup import setup_logging
 from core.os import start_watching
 
@@ -53,6 +55,12 @@ def run_analyze():
     assignments = {record.id: int(label) for record, label in zip(records, labels)}
     update_cluster_assignments(assignments)
 
+    logger.info("Оцениваем длительность активности по каждому заголовку...")
+    durations_by_record = compute_durations(records)
+    duration_by_cluster: Dict[int, float] = defaultdict(float)
+    for record, label in zip(records, labels):
+        duration_by_cluster[int(label)] += durations_by_record.get(record.id, 0.0)
+
     summaries = brain.summarize(titles, embeddings)
     logger.info(f"Готово: выделено {len(summaries)} кластеров.")
 
@@ -61,7 +69,8 @@ def run_analyze():
             cluster_index=summary.cluster_id,
             name=name_cluster(summary.top_titles),
             size=summary.size,
-            top_titles=summary.top_titles
+            top_titles=summary.top_titles,
+            duration_seconds=duration_by_cluster.get(summary.cluster_id, 0.0),
         )
         for summary in summaries
     ]
@@ -152,23 +161,34 @@ def _rename_cluster_interactive(run_date: str, order: List[int]):
 
 def _render_clusters_table(clusters: List[ClusterSnapshot], run_date: str):
     table = Table(
-        title=f"DeepMindly — анализ активности за {run_date}",
+        title=f"🧠 DeepMindly - анализ активности за {run_date}",
         show_lines=True,
         title_style="bold magenta",
     )
     table.add_column("Номер строки", justify="center", style="bold yellow")
     table.add_column("Активность", style="bold green")
     table.add_column("Записей", justify="center")
+    table.add_column("Время", justify="center")
     table.add_column("Типичные заголовки")
 
-    ordered = sorted(clusters, key=lambda c: c.size, reverse=True)
+    ordered = sorted(clusters, key=lambda c: c.duration_seconds, reverse=True)
+    total_duration = sum(c.duration_seconds for c in ordered)
+
     for position, cluster in enumerate(ordered, start=1):
         top_titles_block = "\n".join(f"• {t}" for t in cluster.top_titles)
-        table.add_row(str(position), cluster.name, str(cluster.size), top_titles_block)
+        fraction = (cluster.duration_seconds / total_duration) if total_duration > 0 else 0.0
+        time_block = (
+            f"[bold]{format_duration(cluster.duration_seconds)}[/bold]  {fraction * 100:.0f}%\n"
+            f"[cyan]{render_time_bar(fraction)}[/cyan]"
+        )
+        table.add_row(str(position), cluster.name, str(cluster.size), time_block, top_titles_block)
 
     console.print(table)
     total_records = sum(c.size for c in ordered)
-    console.print(f"[dim]Всего записей: {total_records} | Активностей: {len(ordered)}[/dim]")
+    console.print(
+        f"[dim]Всего записей: {total_records} | Активностей: {len(ordered)} | "
+        f"Общее время: {format_duration(total_duration)}[/dim]"
+    )
 
     return [c.cluster_index for c in ordered]
 
