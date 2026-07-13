@@ -37,7 +37,7 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-                cluster_id INTEGER
+                cluster_index INTEGER
             )
             """
         )

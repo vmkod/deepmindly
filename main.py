@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import date
 from typing import List
 
 from rich.console import Console
@@ -11,6 +12,7 @@ from core.ai.brain import ClusterBrain
 from core.ai.vectors import encode_titles
 from core.config import settings
 from core.db import fetch_all_titles, update_cluster_assignments
+from core.db.history import ClusterSnapshot, get_run, list_runs, save_run
 from core.os import start_watching
 
 console = Console()
@@ -28,7 +30,7 @@ def run_analyze():
         console.print(
             Panel(
                 f"Недостаточно данных для анализа (найдено записей: {len(records)}).\n"
-                "Сначала запустите [bold]python main.py --watch[/bold], чтобы накопить историю.",
+                "Сначала запустите [bold]main.py --watch[/bold], чтобы накопить историю.",
                 title="⚠ DeepMindly",
                 style="yellow",
             )
@@ -49,33 +51,90 @@ def run_analyze():
     summaries = brain.summarize(titles, embeddings)
     print(f"Готово: выделено {len(summaries)} кластеров.")
 
-    _render_clusters_table(summaries)
+    snapshots = [
+        ClusterSnapshot(
+            cluster_index=summary.cluster_id,
+            name=f"Кластер #{summary.cluster_id}",
+            size=summary.size,
+            top_titles=summary.top_titles,
+        )
+        for summary in summaries
+    ]
+
+    today = date.today().isoformat()
+    save_run(today, snapshots)
+
+    _render_clusters_table(snapshots, today)
+    console.print(
+        "\n[dim]Подсказка: [bold]main.py --history[/bold] — посмотреть прошлые дни.[/dim]"
+    )
 
 
-def _render_clusters_table(summaries: List):
+def run_history():
+    dates = sorted(list_runs())
+    if not dates:
+        console.print(
+            Panel(
+                "Сохранённых анализов пока нет. Запустите [bold]main.py --analyze[/bold].",
+                title="⚠ DeepMindly",
+                style="yellow",
+            )
+        )
+        return
+
+    index = len(dates) - 1
+    console.print(
+        "[dim]Команды: [bold]n[/bold] — следующий день · [bold]p[/bold] — предыдущий день · "
+        "[bold]q[/bold] — выход[/dim]\n"
+    )
+
+    while True:
+        run_date = dates[index]
+        run = get_run(run_date)
+        if run is None:
+            console.print(f"[red]Не удалось загрузить данные за {run_date}.[/red]")
+            break
+
+        _render_clusters_table(run.clusters, run.run_date)
+        console.print(f"[dim]День {index + 1} из {len(dates)}[/dim]")
+
+        command = console.input("\n[bold]> [/bold]").strip().lower()
+        console.print()
+
+        if command == "n":
+            if index < len(dates) - 1:
+                index += 1
+            else:
+                console.print("[yellow]Это последний день в истории.[/yellow]\n")
+        elif command == "p":
+            if index > 0:
+                index -= 1
+            else:
+                console.print("[yellow]Это первый день в истории.[/yellow]\n")
+        elif command == "q":
+            break
+        else:
+            console.print("[red]Неизвестная команда. Используйте n / p / q.[/red]\n")
+
+
+def _render_clusters_table(clusters: List[ClusterSnapshot], run_date: str):
     table = Table(
-        title="DeepMindly — Текущий анализ активности",
+        title=f"DeepMindly — анализ активности за {run_date}",
         show_lines=True,
         title_style="bold magenta",
     )
     table.add_column("#", justify="right", style="dim")
-    table.add_column("Кластер ID", style="bold")
+    table.add_column("Кластер", style="bold")
     table.add_column("Записей", justify="right")
     table.add_column("Типичные заголовки")
 
-    ordered = sorted(summaries, key=lambda s: s.size, reverse=True)
-
-    for position, summary in enumerate(ordered, start=1):
-        top_titles_block = "\n".join(f"• {t}" for t in summary.top_titles)
-        table.add_row(
-            str(position),
-            f"Кластер #{summary.cluster_id}",
-            str(summary.size),
-            top_titles_block
-        )
+    ordered = sorted(clusters, key=lambda c: c.size, reverse=True)
+    for position, cluster in enumerate(ordered, start=1):
+        top_titles_block = "\n".join(f"• {t}" for t in cluster.top_titles)
+        table.add_row(str(position), cluster.name, str(cluster.size), top_titles_block)
 
     console.print(table)
-    total_records = sum(s.size for s in ordered)
+    total_records = sum(c.size for c in ordered)
     console.print(f"[dim]Всего записей: {total_records} | Кластеров: {len(ordered)}[/dim]")
 
 
@@ -86,7 +145,16 @@ def build_parser():
     )
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--watch", action="store_true", help="Запустить фоновый сбор данных")
-    group.add_argument("--analyze", action="store_true", help="Запустить кластеризацию и вывести результаты")
+    group.add_argument(
+        "--analyze",
+        action="store_true",
+        help="Запустить кластеризацию и сохранить снимок за сегодня",
+    )
+    group.add_argument(
+        "--history",
+        action="store_true",
+        help="Просмотреть снимки анализа по дням",
+    )
     return parser
 
 
@@ -98,6 +166,8 @@ def main():
         run_watch()
     elif args.analyze:
         run_analyze()
+    elif args.history:
+        run_history()
 
 
 if __name__ == "__main__":

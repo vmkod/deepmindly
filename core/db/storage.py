@@ -11,7 +11,7 @@ class WindowRecord:
     id: int
     title: str
     created_at: str
-    cluster_id: Optional[int]
+    cluster_index: Optional[int]
 
 
 def save_window_title(title: str):
@@ -27,7 +27,7 @@ def fetch_all_titles():
     init_db()
     with db_cursor() as cur:
         cur.execute(
-            "SELECT id, title, created_at, cluster_id FROM window_titles ORDER BY created_at"
+            "SELECT id, title, created_at, cluster_index FROM window_titles ORDER BY created_at"
         )
         rows = cur.fetchall()
     return [WindowRecord(*row) for row in rows]
@@ -38,6 +38,6 @@ def update_cluster_assignments(assignments: Dict[int, int]):
         return
     with db_cursor() as cur:
         cur.executemany(
-            "UPDATE window_titles SET cluster_id = ? WHERE id = ?",
-            [(cluster_id, record_id) for record_id, cluster_id in assignments.items()],
+            "UPDATE window_titles SET cluster_index = ? WHERE id = ?",
+            [(cluster_index, record_id) for record_id, cluster_index in assignments.items()],
         )
