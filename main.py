@@ -4,6 +4,7 @@ import argparse
 from datetime import date
 from typing import List
 
+from loguru import logger
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -14,6 +15,7 @@ from core.ai.vectors import encode_titles
 from core.config import settings
 from core.db import fetch_all_titles, update_cluster_assignments
 from core.db.history import ClusterSnapshot, get_run, list_runs, rename_cluster, save_run
+from core.logging_setup import setup_logging
 from core.os import start_watching
 
 console = Console()
@@ -24,7 +26,7 @@ def run_watch():
 
 
 def run_analyze():
-    print("Загрузка истории заголовков из базы данных...")
+    logger.info("Загрузка истории заголовков из базы данных...")
     records = fetch_all_titles()
 
     if len(records) < 3:
@@ -39,10 +41,12 @@ def run_analyze():
         return
 
     titles = [record.title for record in records]
-    print(f"Загружено {len(titles)} заголовков. Строим эмбеддинги ({settings.ai_model_name})...")
+    logger.info(
+        f"Загружено {len(titles)} заголовков. Строим эмбеддинги ({settings.ai_model_name})..."
+    )
     embeddings = encode_titles(titles)
 
-    print(f"Кластеризация методом K-Means (n_clusters={settings.ai_n_clusters})...")
+    logger.info(f"Кластеризация методом K-Means (n_clusters={settings.ai_n_clusters})...")
     brain = ClusterBrain()
     labels = brain.fit(embeddings)
 
@@ -50,7 +54,7 @@ def run_analyze():
     update_cluster_assignments(assignments)
 
     summaries = brain.summarize(titles, embeddings)
-    print(f"Готово: выделено {len(summaries)} кластеров.")
+    logger.info(f"Готово: выделено {len(summaries)} кластеров.")
 
     snapshots = [
         ClusterSnapshot(
@@ -64,6 +68,7 @@ def run_analyze():
 
     today = date.today().isoformat()
     save_run(today, snapshots)
+    logger.info(f"Снимок анализа сохранён за {today}.")
 
     _render_clusters_table(snapshots, today)
     console.print(
@@ -139,6 +144,7 @@ def _rename_cluster_interactive(run_date: str, order: List[int]):
         return
 
     if rename_cluster(run_date, cluster_index, new_name):
+        logger.info(f"Кластер номер {cluster_index} за {run_date} переименован в «{new_name}».")
         console.print(f"[green]Готово! Название успешно сохранено.[/green]\n")
     else:
         console.print("[red]Не удалось обновить имя в базе.[/red]\n")
@@ -180,6 +186,8 @@ def build_parser():
 
 
 def main():
+    setup_logging()
+
     parser = build_parser()
     args = parser.parse_args()
 

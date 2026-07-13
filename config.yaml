@@ -1,5 +1,5 @@
 database:
-  # Путь указывается относительно расположения этого config.yaml
+  # Путь к файлу базы данных указывается относительно расположения этого config.yaml
   path: "data/deepmindly.db"
 
 watcher:
@@ -13,3 +13,9 @@ ai:
   n_clusters: 3
   # Сколько заголовков выводить на кластер
   top_n_titles: 3
+
+logging:
+  # Уровень логирования: DEBUG, INFO, WARNING, ERROR
+  level: "INFO"
+  # Путь к файлу логов указывается относительно расположения этого config.yaml
+  file: "data/logs/deepmindly.log"
